@@ -161,7 +161,7 @@ heap operations into atomic units."
             (heap-dirty heap) nil)
       elt)))
 
-(defun heap-peek (heap)
+(defun heap-top (heap)
   "Returns the element at the top of the HEAP, and a secondary value of T.
 Should the heap be empty, both the primary and the secondary values are NIL."
   (let ((elt (aref (heap-vector heap) 0)))

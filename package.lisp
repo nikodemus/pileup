@@ -34,7 +34,7 @@
    #:make-heap
    #:with-locked-heap
    #:heap-insert
-   #:heap-peek
+   #:heap-top
    #:heap-pop
    #:heap-delete
    #:map-heap))
