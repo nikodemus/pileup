@@ -37,4 +37,5 @@
    #:heap-top
    #:heap-pop
    #:heap-delete
-   #:map-heap))
+   #:map-heap)
+  (:import-from :alexandria #:array-index #:required-argument))
