@@ -19,8 +19,8 @@
 ;;;; TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 ;;;; SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-(defsystem #:pileup
-  :depends-on (:alexandria #-sbcl :boardaux-threads)
+(defsystem :pileup
+  :depends-on (:alexandria #-sbcl :bordeaux-threads)
   :description "A thread-safe binary heap."
   :licence "MIT"
   :author "Nikodemus Siivola <nikodemus@sb-studio.net>"
