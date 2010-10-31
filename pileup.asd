@@ -20,12 +20,12 @@
 ;;;; SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 (defsystem #:pileup
-  :serial t
-  :author "Nikodemus Siivola <nikodemus@sb-studio.net>"
+  :depends-on (:alexandria #-sbcl :boardaux-threads)
+  :description "A thread-safe binary heap."
   :licence "MIT"
-  :description "A thread-safe heap implementation."
+  :author "Nikodemus Siivola <nikodemus@sb-studio.net>"
   :version "0.9.0"
-  :depends-on (#:alexandria #:boardaux-threads)
+  :serial t
   :components ((:file "package")
                (:file "pileup")
                (:static-file "README")
