@@ -38,4 +38,6 @@
    #:heap-pop
    #:heap-delete
    #:map-heap)
-  (:import-from :alexandria #:array-index #:required-argument))
+  (:import-from :alexandria #:array-index #:required-argument)
+  #+sb-package-locks
+  (:lock t))
