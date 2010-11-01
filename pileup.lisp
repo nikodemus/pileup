@@ -33,7 +33,15 @@
                                                         (setf (aref vector 0) +empty+)
                                                         vector))))
              (:copier nil))
-  "A binary heap."
+  "A thread-safe binary heap.
+
+Heap operations which need a consistent heap geometry lock the heap. Users can
+also group multiple heap operations into atomic units using WITH-LOCKED-HEAP.
+
+Thread-safety is implemented using a single lock per heap. While PILEUP:HEAP
+is fine for heaps used from multiple threads, a more specialized solution is
+recommended when the heap is highly contested between multiple threads."
+  (name nil :read-only t)
   ;; One longer than SIZE: we keep the min element in both 0 and 1. Using
   ;; 1-based addressing makes heap calculations simpler, and keeping a
   ;; separate reference in 0 allows HEAP-MIN to be lockless.
@@ -48,11 +56,7 @@
   (lock #+sbcl (sb-thread:make-mutex :name "Heap Lock")
         #-sbcl (bordeaux-threads:make-lock :name "Heap Lock")
         :read-only t)
-  ;; True while the heap property is being fixed up. Used to detect if predicate
-  ;; causes recursive entry into heap routines. Similarly a predicate that causes
-  ;; a non-local exit can leave the heap dirty.
-  (dirty nil)
-  (name nil :read-only t))
+  (state :clean :type (member :clean :dirty :traverse)))
 
 (setf (documentation 'make-heap 'function)
       "Constructs a binary heap.
@@ -71,28 +75,30 @@ it is not necessary: the heap will grow as necessary, but a reasonable
 estimate can improve performance.")
 
 (setf (documentation 'heap-name 'function)
-      "Name of the heap. Only affects printed representation of the heap.")
+      "Name of the heap. Only affects printed representation of the heap. Can
+be changed using SETF. Does not lock the heap.")
 
 (setf (documentation 'heap-predicate 'function)
       "Heap predicate. A function of two arguments, returning true if the first
-argument should be closer to te top of the heap than the second.")
+argument should be closer to te top of the heap than the second. Does not lock
+the heap.")
 
 (setf (documentation 'heap-p 'function)
-      "Returns true if the argument is a heap.")
+      "Returns true if the argument is a heap. Does not lock the heap.")
 
 (declaim (inline heap-count))
 (defun heap-count (heap)
-  "Returns the number of objects in the heap."
+  "Returns the number of objects in the heap. Does not lock the heap."
   (heap-%count heap))
 
 (declaim (inline heap-size))
 (defun heap-size (heap)
-  "Returns the reserved size of the heap."
+  "Returns the reserved size of the heap. Does not lock the heap."
   (heap-%size heap))
 
 (declaim (inline heap-empty-p))
 (defun heap-empty-p (heap)
-  "Returns true if the heap is empty."
+  "Returns true if the heap is empty. Does not lock the heap."
   (zerop (heap-count heap)))
 
 (defmethod print-object ((heap heap) stream)
@@ -107,8 +113,8 @@ argument should be closer to te top of the heap than the second.")
 
 (defmacro with-locked-heap ((heap) &body body)
   "Executes BODY with HEAP locked. Heap operations which implicitly lock the
-heap are: HEAP-INSERT, HEAP-POP, and HEAP-DELETE. Allows grouping multiple
-heap operations into atomic units."
+heap are: HEAP-INSERT, HEAP-POP, HEAP-DELETE, and MAP-HEAP. Allows grouping
+multiple heap operations into atomic units."
   #+sbcl
   `(sb-thread:with-recursive-lock ((heap-lock ,heap))
      ,@body)
@@ -121,12 +127,24 @@ heap operations into atomic units."
 
 (defconstant max-heap-size (- heap-size-limit 1))
 
+(defun check-heap-clean (heap what &optional allow-traverse)
+  (ecase (heap-state heap)
+    (:clean t)
+    (:dirty
+     (error "Heap dirty on entry to ~S: ~S"
+            what heap))
+    (:traverse
+     (unless allow-traverse
+       (error "Cannot ~S while ~S is in progress: ~S"
+              what 'map-heap heap)))))
+
 (defun heap-insert (elt heap)
-  "Insert ELT to HEAP. Returns ELT."
+  "Insert ELT to HEAP. Returns ELT.
+
+Implicitly locks the heap during its operation."
   (declare (heap heap))
   (with-locked-heap (heap)
-    (when (heap-dirty heap)
-      (error "Heap dirty on entry to HEAP-INSERT."))
+    (check-heap-clean heap 'heap-insert)
     (let* ((vector (heap-vector heap))
            (pred (heap-predicate heap))
            (size (heap-size heap))
@@ -141,7 +159,7 @@ heap operations into atomic units."
                 (heap-%size heap) new-size
                 (heap-vector heap) vector)))
       ;; Mark the heap dirty, and insert the element at the end of the vector.
-      (setf (heap-dirty heap) t
+      (setf (heap-state heap) :dirty
             (aref vector (incf count)) elt
             (heap-%count heap) count)
       ;; Restore heap property.
@@ -158,12 +176,14 @@ heap operations into atomic units."
                               child parent)))))
       ;; Put reference to min to 0 too. Heap is now clean.
       (setf (aref vector 0) (aref vector 1)
-            (heap-dirty heap) nil)
+            (heap-state heap) :clean)
       elt)))
 
 (defun heap-top (heap)
   "Returns the element at the top of the HEAP, and a secondary value of T.
-Should the heap be empty, both the primary and the secondary values are NIL."
+Should the heap be empty, both the primary and the secondary values are NIL.
+
+Does not lock the heap."
   (let ((elt (aref (heap-vector heap) 0)))
     (if (eq +empty+ elt)
         (values nil nil)
@@ -171,11 +191,12 @@ Should the heap be empty, both the primary and the secondary values are NIL."
 
 (defun heap-pop (heap)
   "Removes and returns the element at the top of the HEAP and a secondary value of T.
-Should the heap be empty, both the primary and the secondary values are NIL."
+Should the heap be empty, both the primary and the secondary values are NIL.
+
+Implicitly locks the heap during its operation."
   (declare (heap heap))
   (with-locked-heap (heap)
-    (when (heap-dirty heap)
-      (error "Heap dirty on entry to HEAP-POP."))
+    (check-heap-clean heap 'heap-pop)
     (cond ((heap-empty-p heap)
            (values nil nil))
           (t
@@ -189,7 +210,7 @@ Should the heap be empty, both the primary and the secondary values are NIL."
          (bottom (aref vector count))
          (pred (heap-predicate heap)))
     ;; Move BOTTOM in place of VICTIM.
-    (setf (heap-dirty heap) t
+    (setf (heap-state heap) :dirty
           (aref vector count) +empty+
           (aref vector index) bottom
           (heap-%count heap) (decf count))
@@ -236,16 +257,17 @@ Should the heap be empty, both the primary and the secondary values are NIL."
                                 (aref vector parent) child-data
                                 child parent))))))
     ;; Clean again
-    (setf (heap-dirty heap) nil)
+    (setf (heap-state heap) :clean)
     victim))
 
 (defun heap-delete (elt heap)
   "If ELT is in HEAP, removes it. Returns T if one or more references to ELT
-were found and removed, NIL otherwise"
+were found and removed, NIL otherwise.
+
+Implicitly locks the heap during its operation."
   (declare (type heap heap))
   (with-locked-heap (heap)
-    (when (heap-dirty heap)
-      (error "Heap dirty on entry to HEAP-DELETE."))
+    (check-heap-clean heap 'heap-delete)
     (let* ((count (heap-count heap))
            (vector (heap-vector heap))
            (pred (heap-predicate heap)))
@@ -274,30 +296,52 @@ were found and removed, NIL otherwise"
                                 (unless (> right count)
                                   (heap-insert right fringe)))))))))))))
 
-(defun map-heap (function heap)
-  "Calls FUNCTION for each element in heap from top down, following the heap order."
+(defun map-heap (function heap &key (ordered t))
+  "Calls FUNCTION for each element in heap. Returns the heap.
+
+If ORDERED is true \(the default), processes the elements in heap order from
+top down.
+
+If ORDERED is false, uses unordered traversal. Unordered traversal is faster
+and also works on heaps that have been corrupted by eg. the heap predicate
+performing a non-local exit from a heap operation.
+
+Implicitly locks the heap during its operation."
   (declare (heap heap))
   (with-locked-heap (heap)
-    (when (heap-dirty heap)
-      (error "Heap dirty on entry to MAP-HEAP"))
-    (let ((count (heap-count heap)))
-      (unless (zerop count)
-        (let* ((vector (heap-vector heap))
-               (pred (heap-predicate heap))
-               ;; Another heap to help us maintain order during traversal.
-               (fringe (make-heap (lambda (x y)
-                                    (funcall pred (aref vector x) (aref vector y))))))
-          ;; Grab the lock now so we don't need to do that repeatedly.
-          (with-locked-heap (fringe)
-            (heap-insert 1 fringe)
-            (loop until (heap-empty-p fringe)
-                  do (let* ((parent (heap-pop fringe))
-                            (left (* 2 parent))
-                            (right (1+ left)))
-                       (funcall function (aref vector parent))
-                       (unless (> left count)
-                         (heap-insert left fringe))
-                       (unless (> right count)
-                         (heap-insert right fringe))))
-            (heap-size fringe)))))))
+    (let ((count (heap-count heap))
+          (old-state (heap-state heap)))
+      (when ordered
+        (check-heap-clean heap 'map-heap t))
+      (unwind-protect
+           (unless (zerop count)
+             ;; Mark the heap as traversed
+             (setf (heap-state heap) :traverse)
+             (let ((vector (heap-vector heap)))
+               (if ordered
+                   ;; ORDERED = T traversal. Keep fringe in another heap
+                   ;; to maintain order.
+                   (let* ((pred (heap-predicate heap))
+                          (fringe (make-heap
+                                   (lambda (x y)
+                                     (funcall pred (aref vector x) (aref vector y))))))
+                     ;; Grab the lock now so we don't need to do that repeatedly.
+                     (with-locked-heap (fringe)
+                       (heap-insert 1 fringe)
+                       (loop until (heap-empty-p fringe)
+                             do (let* ((parent (heap-pop fringe))
+                                       (left (* 2 parent))
+                                       (right (1+ left)))
+                                  (funcall function (aref vector parent))
+                                  (unless (> left count)
+                                    (heap-insert left fringe))
+                                  (unless (> right count)
+                                    (heap-insert right fringe))))
+                       (heap-size fringe)))
+                   ;; ORDERED = NIL traversal. Just iterate over the vector.
+                   (loop for i from 1 upto count
+                         do (funcall function (aref vector i))))))
+        ;; Restore the old state: either :CLEAN, or another :TRAVERSE.
+        (setf (heap-state heap) old-state))))
+  heap)
 
