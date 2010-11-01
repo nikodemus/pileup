@@ -376,7 +376,6 @@ holding the heap lock via WITH-LOCKED-HEAP."
       (unless (zerop count)
         (let ((fringe (make-heap (lambda (x y)
                                    (funcall test (aref vector x) (aref vector y))))))
-          (declare (dynamic-extent))
           ;; Grab the lock now so we don't need to do that repeatedly.
           (with-locked-heap (fringe)
             (heap-insert 1 fringe)
