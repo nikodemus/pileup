@@ -1,0 +1,77 @@
+\input texinfo   @c -*-texinfo-*-
+@c %**start of header
+@setfilename pileup.info
+@settitle Pileup
+@c %**end of header
+
+@settitle Pileup
+
+@c for install-info
+@dircategory Software development
+@direntry
+* Pileup:           A Thread-Safe Binary Heap
+@end direntry
+
+@titlepage
+
+@title Pileup
+@subtitle A Thread-Safe Binary Heap
+
+@c The following two commands start the copyright page.
+@page
+@vskip 0pt plus 1filll
+@insertcopying
+
+@end titlepage
+
+Pileup provides a portable, performant, and thread-safe binary heap
+for Common Lisp, licensed under MIT-style license.
+
+It depends on Alexandria, and outside SBCL additionally on Bordeaux-Threads.
+
+Pileup is courtesy of @url{http://sb-studio.net/, Steel Bank Studio
+Ltd} and written by @email{nikodemus@@sb-studio.net, Nikodemus Siivola}.
+
+Pileup is maintained in Git:
+@example
+git clone git://github.com/nikodemus/pileup.git
+@end example
+will get you a local copy.
+
+@contents
+
+@ifnottex
+
+@include include/ifnottex.texinfo
+
+@end ifnottex
+
+@chapter Making Heaps
+
+@include include/struct-pileup-heap.texinfo
+@include include/fun-pileup-make-heap.texinfo
+
+@chapter Heap Operations
+
+@include include/macro-pileup-with-locked-heap.texinfo
+
+@include include/fun-pileup-heap-insert.texinfo
+@include include/fun-pileup-heap-pop.texinfo
+@include include/fun-pileup-heap-top.texinfo
+
+@include include/fun-pileup-heap-delete.texinfo
+@include include/fun-pileup-map-heap.texinfo
+
+@chapter Heap Properties
+
+@include include/fun-pileup-heap-count.texinfo
+@include include/fun-pileup-heap-empty-p.texinfo
+@include include/fun-pileup-heap-name.texinfo
+
+@include include/fun-pileup-heap-key.texinfo
+@include include/fun-pileup-heap-predicate.texinfo
+
+@include include/fun-pileup-heap-size.texinfo
+@include include/constant-pileup-heap-size-limit.texinfo
+
+@bye

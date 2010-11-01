@@ -31,9 +31,7 @@
 
 (in-suite test-pileup)
 
-(deftest heap-type ()
-  (is (heap-p (make-heap #'<)))
-  (is (not (heap-p (cons t t))))
+(deftest heap-misc ()
   (is (subtypep 'heap 'structure-object))
   (is (< heap-size-limit array-dimension-limit)))
 

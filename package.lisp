@@ -29,8 +29,8 @@
    #:heap-delete
    #:heap-empty-p
    #:heap-insert
+   #:heap-key
    #:heap-name
-   #:heap-p
    #:heap-pop
    #:heap-predicate
    #:heap-size

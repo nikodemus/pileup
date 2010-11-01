@@ -34,43 +34,43 @@
 (declaim (inline make-heap make-heap-using-test))
 (defstruct (heap
              (:constructor make-heap
-                           (predicate &key name ((:size %size) 12) key
+                           (predicate &key ((:name %name)) ((:size %size) 12) ((:key %key))
                                       &aux (vector (make-heap-vector %size))
+                                           (%predicate predicate)
                                            (test
                                             (locally
                                                 #+sbcl
                                                 (declare (sb-ext:muffle-conditions
                                                           sb-ext:compiler-note))
-                                                (if key
+                                                (if %key
                                                     (lambda (x y)
-                                                      (declare (function key predicate)
+                                                      (declare (function %key %predicate)
                                                                (optimize (speed 3)
                                                                          (debug 0)
                                                                          (safety 0)))
-                                                      (let ((xx (funcall key x))
-                                                            (yy (funcall key y)))
-                                                        (funcall predicate xx yy)))
-                                                    predicate)))))
+                                                      (let ((xx (funcall %key x))
+                                                            (yy (funcall %key y)))
+                                                        (funcall %predicate xx yy)))
+                                                    %predicate)))))
              (:constructor make-heap-using-test
-                           (predicate test &key name ((:size %size) 12)
-                                           &aux (vector (make-heap-vector %size))))
-             (:copier nil))
+                           (%predicate test &key ((:name %name)) ((:size %size) 12)
+                                             &aux (vector (make-heap-vector %size))))
+             (:copier nil)
+             (:predicate nil))
   "A thread-safe binary heap.
 
-Heap operations which need a consistent heap geometry lock the heap. Users can
-also group multiple heap operations into atomic units using WITH-LOCKED-HEAP.
+Heap operations which need the heap to remain consistent heap lock it. Users
+can also group multiple heap operations into atomic units using
+WITH-LOCKED-HEAP.
 
-Thread-safety is implemented using a single lock per heap. While PILEUP:HEAP
-is fine for heaps used from multiple threads, a more specialized solution is
-recommended when the heap is highly contested between multiple threads.
+Thread-safety is implemented using a single lock per heap. While Pileup heaps
+are fine for threaded use, a more specialized solution is recommended when the
+heap is highly contested between multiple threads.
 
-Pileup heaps are NOT asynch-unwind safe: asynchronous interrupts causing
-non-local exits may leave the heap in an inconsistent state or lose data. Ie.
-DO NOT USE INTERRUPT-THREAD or asychronous timeouts with Pileup.
-
-\(Never assume Lisp code is asych-unwind safe unless that has
-explicitly been stated to be the case.)"
-  (name nil :read-only t)
+Important: Pileup heaps are not asynch-unwind safe: asynchronous interrupts
+causing non-local exits may leave the heap in an inconsistent state or lose
+data. Do not use INTERRUPT-THREAD or asychronous timeouts with Pileup."
+  (%name nil)
   ;; One longer than SIZE: we keep the min element in both 0 and 1. Using
   ;; 1-based addressing makes heap calculations simpler, and keeping a
   ;; separate reference in 0 allows HEAP-MIN to be lockless.
@@ -81,8 +81,8 @@ explicitly been stated to be the case.)"
   (vector (required-argument :vector) :type simple-vector)
   (%count 0 :type array-index)
   (%size (required-argument :%size) :type array-index)
-  (predicate (required-argument :predicate) :type function :read-only t)
-  (key nil :type (or null function) :read-only t)
+  (%predicate (required-argument :predicate) :type function :read-only t)
+  (%key nil :type (or null function) :read-only t)
   ;; Combination of KEY and PREDICATE.
   (test (required-argument :test) :type function :read-only t)
   (lock #+sbcl (sb-thread:make-mutex :name "Heap Lock")
@@ -119,49 +119,61 @@ explicitly been stated to be the case.)"
         whole)))
 
 (setf (documentation 'make-heap 'function)
-      "Constructs a binary heap.
+      "Constructs a HEAP.
 
-PREDICATE determines the ordering of the heap. It must be a function of two
+The PREDICATE determines the ordering of the heap. It must be a function of two
 arguments, returning true if the first argument should be closer to top of the
 heap than the second. If a predicate signals an error and causes a non-local
 exit from a heap operation, it may leave the heap in an inconsistent state and
 cause a subsequent heap operation to signal an error.
 
-If KEY is non-NIL, it is used to extract values used by PREDICATE for
-comparison.
+If KEY is not NIL, it must be a function of one argument, and is used to
+extract values for use by PREDICATE for comparison.
 
-NAME can be used to optionally specify a name for the heap: it affects only
+The NAME can be used to optionally specify a name for the heap: it affects only
 printing of the heap.
 
-SIZE is the size of the storage initially reserved for the heap -- specifying
-it is not necessary: the heap will grow as necessary, but a reasonable
-estimate can improve performance.")
+The SIZE is the size of the storage initially reserved for the heap.
+Specifying size is not necessary: the heap will grow as necessary, but a
+reasonable estimate can improve performance by eliminating unnecessary copying
+by allocation sufficient storage immediately.")
 
-(setf (documentation 'heap-name 'function)
-      "Name of the heap. Only affects printed representation of the heap. Can
-be changed using SETF. Does not lock the heap.")
+;;; KLUDGE: For prettier arglist in the docs.
+(defun heap-name (heap)
+  "Returns the name of the heap. Heap name affects only printed
+representation of the heap. Can be changed using SETF unlike other heap
+properties."
+  (heap-%name heap))
+(defun (setf heap-name) (name heap)
+  (setf (heap-%name heap) name))
 
-(setf (documentation 'heap-predicate 'function)
-      "Heap predicate. A function of two arguments, returning true if the first
-argument should be closer to te top of the heap than the second. Does not lock
-the heap.")
+;;; KLUDGE: For prettier arglist in the docs.
+(defun heap-predicate (heap)
+  "Returns the heap predicate, a function of two arguments, returning true if
+the first argument should be closer to te top of the heap than the second."
+  (heap-%predicate heap))
 
-(setf (documentation 'heap-p 'function)
-      "Returns true if the argument is a heap. Does not lock the heap.")
+;;; KLUDGE: For prettier arglist in the docs.
+(defun heap-key (heap)
+  "Returns the heap key, a function one argument used to extract values for
+use by the heap predicate. Heap key may also be NIL, meaning heap elements are
+used directly by the heap predicate."
+  (heap-%key heap))
 
 (declaim (inline heap-count))
 (defun heap-count (heap)
-  "Returns the number of objects in the heap. Does not lock the heap."
+  "Returns the number of objects in the heap."
   (heap-%count heap))
 
 (declaim (inline heap-size))
 (defun heap-size (heap)
-  "Returns the reserved size of the heap. Does not lock the heap."
+  "Returns the reserved size of the heap. Note, this is not the same as the
+number of elements in the heap: see HEAP-COUNT for comparison."
   (heap-%size heap))
 
 (declaim (inline heap-empty-p))
 (defun heap-empty-p (heap)
-  "Returns true if the heap is empty. Does not lock the heap."
+  "Returns true if the heap is empty, that is iff HEAP-COUNT is zero."
   (zerop (heap-count heap)))
 
 (defmethod print-object ((heap heap) stream)
@@ -188,7 +200,9 @@ multiple heap operations into atomic units."
      ,@body))
 
 (defconstant heap-size-limit (- array-dimension-limit 1)
-  "Exclusive upper limit for heap size.")
+  "Exclusive upper limit for heap size, based on ARRAY-DIMENSION-LIMIT.
+When an insertion is attempted and the heap cannot grow any further, an error
+is signaled.")
 
 (defconstant max-heap-size (- heap-size-limit 1))
 
@@ -206,7 +220,8 @@ multiple heap operations into atomic units."
 (defun heap-insert (elt heap)
   "Insert ELT to HEAP. Returns ELT.
 
-Implicitly locks the heap during its operation."
+Locks the heap during its operation unless the current thread is already
+holding the heap lock via WITH-LOCKED-HEAP."
   (declare (heap heap))
   (with-locked-heap (heap)
     (check-heap-clean heap 'heap-insert)
@@ -249,10 +264,9 @@ Implicitly locks the heap during its operation."
       elt)))
 
 (defun heap-top (heap)
-  "Returns the element at the top of the HEAP, and a secondary value of T.
-Should the heap be empty, both the primary and the secondary values are NIL.
-
-Does not lock the heap."
+  "Returns the element at the top of the HEAP without removing it, and a
+secondary value of T. Should the heap be empty, both the primary and the
+secondary values are NIL."
   (let ((elt (aref (heap-vector heap) 0)))
     (if (eq +empty+ elt)
         (values nil nil)
@@ -262,7 +276,8 @@ Does not lock the heap."
   "Removes and returns the element at the top of the HEAP and a secondary value of T.
 Should the heap be empty, both the primary and the secondary values are NIL.
 
-Implicitly locks the heap during its operation."
+Locks the heap during its operation unless the current thread is already
+holding the heap lock via WITH-LOCKED-HEAP."
   (declare (heap heap))
   (with-locked-heap (heap)
     (check-heap-clean heap 'heap-pop)
@@ -350,7 +365,8 @@ Implicitly locks the heap during its operation."
   "If ELT is in HEAP, removes it. Returns T if one or more references to ELT
 were found and removed, NIL otherwise.
 
-Implicitly locks the heap during its operation."
+Locks the heap during its operation unless the current thread is already
+holding the heap lock via WITH-LOCKED-HEAP."
   (declare (type heap heap))
   (with-locked-heap (heap)
     (check-heap-clean heap 'heap-delete)
@@ -389,10 +405,14 @@ If ORDERED is true \(the default), processes the elements in heap order from
 top down.
 
 If ORDERED is false, uses unordered traversal. Unordered traversal is faster
-and also works on heaps that have been corrupted by eg. the heap predicate or
-key function performing a non-local exit from a heap operation.
+and also works on heaps that have been corrupted by eg. the heap predicate
+performing a non-local exit from a heap operation.
 
-Implicitly locks the heap during its operation."
+Attempts to insert or delete elements to the heap from FUNCTION will cause
+an error to be signalled.
+
+Locks the heap during its operation unless the current thread is already
+holding the heap lock via WITH-LOCKED-HEAP."
   (declare (heap heap))
   (with-locked-heap (heap)
     (let ((count (heap-count heap))
