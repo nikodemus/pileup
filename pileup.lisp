@@ -25,13 +25,35 @@
 ;;; is at 0.
 (defconstant +empty+ '+empty+)
 
-(declaim (inline make-heap))
+(defun make-heap-vector (size)
+  (declare (array-index size))
+  (let ((vector (make-array (1+ size))))
+    (setf (aref vector 0) +empty+)
+    vector))
+
+(declaim (inline make-heap make-heap-using-test))
 (defstruct (heap
-             (:constructor make-heap (predicate &key name ((:size %size) 12)
-                                                &aux (vector
-                                                      (let ((vector (make-array (1+ %size))))
-                                                        (setf (aref vector 0) +empty+)
-                                                        vector))))
+             (:constructor make-heap
+                           (predicate &key name ((:size %size) 12) key
+                                      &aux (vector (make-heap-vector %size))
+                                           (test
+                                            (locally
+                                                #+sbcl
+                                                (declare (sb-ext:muffle-conditions
+                                                          sb-ext:compiler-note))
+                                                (if key
+                                                    (lambda (x y)
+                                                      (declare (function key predicate)
+                                                               (optimize (speed 3)
+                                                                         (debug 0)
+                                                                         (safety 0)))
+                                                      (let ((xx (funcall key x))
+                                                            (yy (funcall key y)))
+                                                        (funcall predicate xx yy)))
+                                                    predicate)))))
+             (:constructor make-heap-using-test
+                           (predicate test &key name ((:size %size) 12)
+                                           &aux (vector (make-heap-vector %size))))
              (:copier nil))
   "A thread-safe binary heap.
 
@@ -49,14 +71,45 @@ recommended when the heap is highly contested between multiple threads."
   ;; Using adjustable arrays would make the code simpler, but because the
   ;; loops for maintaining the heap-property don't need to adjust the vectors
   ;; we'd be paying for the increased access overheap in just the wrong place.
-  (vector (required-argument) :type simple-vector)
+  (vector (required-argument :vector) :type simple-vector)
   (%count 0 :type array-index)
-  (%size (required-argument) :type array-index)
-  (predicate (required-argument) :type function :read-only t)
+  (%size (required-argument :%size) :type array-index)
+  (predicate (required-argument :predicate) :type function :read-only t)
+  (key nil :type (or null function) :read-only t)
+  ;; Combination of KEY and PREDICATE.
+  (test (required-argument :test) :type function :read-only t)
   (lock #+sbcl (sb-thread:make-mutex :name "Heap Lock")
         #-sbcl (bordeaux-threads:make-lock :name "Heap Lock")
         :read-only t)
   (state :clean :type (member :clean :dirty :traverse)))
+
+(define-compiler-macro make-heap (&whole whole predicate &rest initargs)
+  (let ((no-key t))
+    ;; Check that no KEY is being used.
+    (doplist (key val initargs)
+      (when (or (eq :key key) (not (keywordp key)))
+        (setf no-key nil)))
+    ;; Calling variadic functions like #'< is generally a whole lot slower than
+    ;; calling them with a known number of arguments. Once :ELEMENT-TYPE is
+    ;; added we can also inform the predicate about it here.
+    ;;
+    ;; At least for compilers like SBCL the TEST lambda in the constructor
+    ;; does the same job for cases where KEY is provided.
+    (if (and no-key
+             (consp predicate)
+             (starts-with 'function predicate)
+             (member (second predicate) '(< <= > >=)))
+        (with-gensyms (x y)
+          `(make-heap-using-test ,predicate
+                                 (lambda (,x ,y)
+                                   (declare (optimize (speed 3)
+                                                      (debug 0)
+                                                      (safety 0)))
+                                   #+sbcl
+                                   (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+                                   (funcall ,predicate ,x ,y))
+                                 ,@initargs))
+        whole)))
 
 (setf (documentation 'make-heap 'function)
       "Constructs a binary heap.
@@ -66,6 +119,9 @@ arguments, returning true if the first argument should be closer to top of the
 heap than the second. If a predicate signals an error and causes a non-local
 exit from a heap operation, it may leave the heap in an inconsistent state and
 cause a subsequent heap operation to signal an error.
+
+If KEY is non-NIL, it is used to extract values used by PREDICATE for
+comparison.
 
 NAME can be used to optionally specify a name for the heap: it affects only
 printing of the heap.
@@ -102,14 +158,16 @@ the heap.")
   (zerop (heap-count heap)))
 
 (defmethod print-object ((heap heap) stream)
-  (print-unreadable-object (heap stream :type t :identity t)
-    (format stream "~@[~S ~]count: ~S predicate: ~S"
-            (heap-name heap)
-            (heap-count heap)
-            (let ((pred (heap-predicate heap)))
-              (or (when (functionp pred)
-                    (nth-value 2 (function-lambda-expression pred)))
-                  pred)))))
+  (flet ((pretty-fun (fun)
+           (or (when (functionp fun)
+                 (nth-value 2 (function-lambda-expression fun)))
+               fun)))
+    (print-unreadable-object (heap stream :type t :identity t)
+     (format stream "~@[~S ~]count: ~S predicate: ~S~@[ key: ~S~]"
+             (heap-name heap)
+             (heap-count heap)
+             (pretty-fun (heap-predicate heap))
+             (pretty-fun (heap-key heap))))))
 
 (defmacro with-locked-heap ((heap) &body body)
   "Executes BODY with HEAP locked. Heap operations which implicitly lock the
@@ -146,13 +204,13 @@ Implicitly locks the heap during its operation."
   (with-locked-heap (heap)
     (check-heap-clean heap 'heap-insert)
     (let* ((vector (heap-vector heap))
-           (pred (heap-predicate heap))
+           (test (heap-test heap))
            (size (heap-size heap))
            (count (heap-count heap)))
       ;; Sanity-check the heap element: if the predicate will signal an error
       ;; on receiving it, it is better to know about it before we mess up the
       ;; heap state.
-      (funcall pred elt elt)
+      (funcall test elt elt)
       ;; Make space if necessary.
       (when (= count size)
         (when (= size max-heap-size)
@@ -172,7 +230,7 @@ Implicitly locks the heap during its operation."
             do (let* ((parent (truncate child 2))
                       (parent-data (aref vector parent))
                       (child-data (aref vector child)))
-                 (cond ((funcall pred parent-data child-data)
+                 (cond ((funcall test parent-data child-data)
                         (return))
                        (t
                         (setf (aref vector child) parent-data
@@ -212,7 +270,7 @@ Implicitly locks the heap during its operation."
          (count (heap-count heap))
          (victim (aref vector index))
          (bottom (aref vector count))
-         (pred (heap-predicate heap))
+         (test (heap-test heap))
          (recoverable t))
     (unwind-protect
          (progn
@@ -233,12 +291,12 @@ Implicitly locks the heap during its operation."
                            (left-data nil)
                            (right-data nil))
                       (unless (or (> left count)
-                                  (funcall pred parent-data
+                                  (funcall test parent-data
                                            (setf left-data (aref vector left))))
                         (setf local left
                               local-data left-data))
                       (unless (or (> right count)
-                                  (funcall pred local-data
+                                  (funcall test local-data
                                            (setf right-data (aref vector right))))
                         (setf local right
                               local-data right-data))
@@ -258,7 +316,7 @@ Implicitly locks the heap during its operation."
                      do (let* ((parent (truncate child 2))
                                (parent-data (aref vector parent))
                                (child-data (aref vector child)))
-                          (cond ((funcall pred parent-data child-data)
+                          (cond ((funcall test parent-data child-data)
                                  (return))
                                 (t
                                  (setf (aref vector child) parent-data
@@ -291,10 +349,10 @@ Implicitly locks the heap during its operation."
     (check-heap-clean heap 'heap-delete)
     (let* ((count (heap-count heap))
            (vector (heap-vector heap))
-           (pred (heap-predicate heap)))
+           (test (heap-test heap)))
       (unless (zerop count)
         (let ((fringe (make-heap (lambda (x y)
-                                   (funcall pred (aref vector x) (aref vector y))))))
+                                   (funcall test (aref vector x) (aref vector y))))))
           (declare (dynamic-extent))
           ;; Grab the lock now so we don't need to do that repeatedly.
           (with-locked-heap (fringe)
@@ -306,7 +364,7 @@ Implicitly locks the heap during its operation."
                               ;; Got it. Now delete them all.
                               (loop do (%heap-delete parent heap)
                                     while (eql elt (aref vector parent))))
-                             ((funcall pred elt parent-elt)
+                             ((funcall test elt parent-elt)
                               ;; Searched past it.
                               (return-from heap-delete t))
                              (t
@@ -324,8 +382,8 @@ If ORDERED is true \(the default), processes the elements in heap order from
 top down.
 
 If ORDERED is false, uses unordered traversal. Unordered traversal is faster
-and also works on heaps that have been corrupted by eg. the heap predicate
-performing a non-local exit from a heap operation.
+and also works on heaps that have been corrupted by eg. the heap predicate or
+key function performing a non-local exit from a heap operation.
 
 Implicitly locks the heap during its operation."
   (declare (heap heap))
@@ -342,10 +400,10 @@ Implicitly locks the heap during its operation."
                (if ordered
                    ;; ORDERED = T traversal. Keep fringe in another heap
                    ;; to maintain order.
-                   (let* ((pred (heap-predicate heap))
+                   (let* ((test (heap-test heap))
                           (fringe (make-heap
                                    (lambda (x y)
-                                     (funcall pred (aref vector x) (aref vector y))))))
+                                     (funcall test (aref vector x) (aref vector y))))))
                      ;; Grab the lock now so we don't need to do that repeatedly.
                      (with-locked-heap (fringe)
                        (heap-insert 1 fringe)

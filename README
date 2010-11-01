@@ -5,7 +5,6 @@ TODO
 
 * HEAP-DELETE should accept keyword arguments similar to CL:DELETE.
 * Add HEAP-DELETE-IF and HEAP-DELETE-IF-NOT.
-* MAKE-HEAP should also accept :KEY.
 * MAKE-HEAP should also accept :ELEMENT-TYPE.
   Unboxed allocation for long-lived heaps storing numbers.
 * Add other types of heaps.

@@ -20,7 +20,7 @@
 ;;;; SOFTWARE OR THE;;;; USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 (defpackage :pileup
-  (:use :cl #-sbcl :bordeaux-threads)
+  (:use :cl :alexandria #-sbcl :bordeaux-threads)
   (:documentation
    "Pileup provides a thread-safe binary heap implementation.")
   (:export
@@ -40,6 +40,5 @@
    #:map-heap
    #:with-locked-heap
    )
-  (:import-from :alexandria #:array-index #:required-argument)
   #+sb-package-locks
   (:lock t))

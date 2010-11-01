@@ -151,3 +151,10 @@
       (is (zerop oops))
       (is (zerop x))
       (is (= 128 (heap-count heap))))))
+
+(deftest heap-key-test ()
+  (let ((heap (make-heap #'< :key #'car)))
+    (dotimes (i 12)
+      (heap-insert (cons i t) heap))
+    (is (= 12 (heap-count heap)))
+    (is (equal (cons 0 t) (heap-top heap)))))
