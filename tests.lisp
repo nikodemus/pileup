@@ -93,23 +93,61 @@
                   (is (eql i x)))
                 heap)
       (is (zerop x))
-      (is (= 128 (heap-count heap))))
-    ;; Now break the heap by inserting a bad element.
-    (ignore-errors
-      (heap-insert "ding" heap))
-    (is (eq :dirty (pileup::heap-state heap)))
+      (is (= 128 (heap-count heap))))))
+
+(deftest heap-bad-insert ()
+  (let ((heap (make-heap #'<)))
+    (dotimes (i 128)
+      ;; Insertion of an element breaking the
+      ;; predicate should unwind but leave the
+      ;; heap intact.
+      (ignore-errors
+        (heap-insert (princ-to-string i) heap))
+      (heap-insert i heap))
+    (is (= 128 (heap-count heap)))
+    (let ((oops 0))
+      (dotimes (i 128)
+        (unless (= i (heap-pop heap))
+          (incf oops)))
+      (is (zerop oops)))))
+
+(deftest heap-broken-delete ()
+  (let ((heap (make-heap (lambda (x y)
+                           (unless (eq :pass *)
+                             (check-type x unsigned-byte)
+                             (check-type y unsigned-byte))
+                           (> x y)))))
+    (dotimes (i 128)
+      (heap-insert i heap))
+    (is (= 128 (heap-count heap)))
+    (is (= 127 (heap-top heap)))
+    ;; Now break the heap.
+    (let ((* :pass))
+      (heap-insert -1 heap))
+    (is (eq :error
+            (handler-case
+                (heap-pop heap)
+              (error () :error))))
+    ;; Unwinding from HEAP-POP can recover heap state
+    ;; in simple cases.
+    (is (eq :clean (pileup::heap-state heap)))
     ;; Unordered map to the rescue.
-    (let ((new (make-heap #'>)))
+    (let ((new (make-heap (heap-predicate heap))))
       (map-heap (lambda (i)
-                  (when (integerp i)
+                  (when (typep i 'unsigned-byte)
                     (heap-insert i new)))
                 heap
                 :ordered nil)
       (setf heap new))
-    (let ((x 128))
+    (is (= 128 (heap-count heap)))
+    (is (= 127 (heap-top heap)))
+    (let ((x 128)
+          (oops 0))
       (map-heap (lambda (i)
                   (decf x)
-                  (is (eql i x)))
+                  (unless (eql i x)
+                    (incf oops)))
                 heap)
+      (is (zerop oops))
       (is (zerop x))
       (is (= 128 (heap-count heap))))))

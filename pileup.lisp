@@ -149,6 +149,10 @@ Implicitly locks the heap during its operation."
            (pred (heap-predicate heap))
            (size (heap-size heap))
            (count (heap-count heap)))
+      ;; Sanity-check the heap element: if the predicate will signal an error
+      ;; on receiving it, it is better to know about it before we mess up the
+      ;; heap state.
+      (funcall pred elt elt)
       ;; Make space if necessary.
       (when (= count size)
         (when (= size max-heap-size)
@@ -208,56 +212,73 @@ Implicitly locks the heap during its operation."
          (count (heap-count heap))
          (victim (aref vector index))
          (bottom (aref vector count))
-         (pred (heap-predicate heap)))
-    ;; Move BOTTOM in place of VICTIM.
-    (setf (heap-state heap) :dirty
-          (aref vector count) +empty+
-          (aref vector index) bottom
-          (heap-%count heap) (decf count))
-    ;; Restore heap property.
-    ;; Step 1: from deleted element to end
-    (loop with parent = index
-          while (< parent count)
-          do (let* ((local parent)
-                    (local-data (aref vector parent))
-                    (parent-data local-data)
-                    (left (* 2 parent))
-                    (right (+ left 1))
-                    (left-data nil)
-                    (right-data nil))
-               (unless (or (> left count)
-                           (funcall pred parent-data
-                                    (setf left-data (aref vector left))))
-                 (setf local left
-                       local-data left-data))
-               (unless (or (> right count)
-                           (funcall pred local-data
-                                    (setf right-data (aref vector right))))
-                 (setf local right
-                       local-data right-data))
-               (if (= local parent)
-                   (return)
-                   (setf (aref vector parent) local-data
-                         (aref vector local) parent-data
-                         parent local))))
-    (if (= index 1)
-        ;; Deleted the topmost element: copy it to V[0]
-        (setf (aref vector 0) (aref vector 1))
-        ;; Deleted something from middle: fix heap property
-        ;; towards the head.
-        (loop with child = index
-              while (> child 1)
-              do (let* ((parent (truncate child 2))
-                        (parent-data (aref vector parent))
-                        (child-data (aref vector child)))
-                   (cond ((funcall pred parent-data child-data)
-                          (return))
-                         (t
-                          (setf (aref vector child) parent-data
-                                (aref vector parent) child-data
-                                child parent))))))
-    ;; Clean again
-    (setf (heap-state heap) :clean)
+         (pred (heap-predicate heap))
+         (recoverable t))
+    (unwind-protect
+         (progn
+           ;; Move BOTTOM in place of VICTIM.
+           (setf (heap-state heap) :dirty
+                 (aref vector count) +empty+
+                 (aref vector index) bottom
+                 (heap-%count heap) (decf count))
+           ;; Restore heap property.
+           ;; Step 1: from deleted element to end
+           (loop with parent = index
+                 while (< parent count)
+                 do (let* ((local parent)
+                           (local-data (aref vector parent))
+                           (parent-data local-data)
+                           (left (* 2 parent))
+                           (right (+ left 1))
+                           (left-data nil)
+                           (right-data nil))
+                      (unless (or (> left count)
+                                  (funcall pred parent-data
+                                           (setf left-data (aref vector left))))
+                        (setf local left
+                              local-data left-data))
+                      (unless (or (> right count)
+                                  (funcall pred local-data
+                                           (setf right-data (aref vector right))))
+                        (setf local right
+                              local-data right-data))
+                      (if (= local parent)
+                          (return)
+                          (setf (aref vector parent) local-data
+                                (aref vector local) parent-data
+                                parent local
+                                recoverable nil))))
+           (if (= index 1)
+               ;; Deleted the topmost element: copy it to V[0]
+               (setf (aref vector 0) (aref vector 1))
+               ;; Deleted something from middle: fix heap property
+               ;; towards the head.
+               (loop with child = index
+                     while (> child 1)
+                     do (let* ((parent (truncate child 2))
+                               (parent-data (aref vector parent))
+                               (child-data (aref vector child)))
+                          (cond ((funcall pred parent-data child-data)
+                                 (return))
+                                (t
+                                 (setf (aref vector child) parent-data
+                                       (aref vector parent) child-data
+                                       child parent
+                                       recoverable nil))))))
+           ;; Clean again
+           (setf (heap-state heap) :clean))
+      ;; If we're not clean, try to recover on unwind.
+      (unless (eq :clean (heap-state heap))
+        (setf (heap-%count heap) (incf count))
+        (if recoverable
+            ;; We didn't actually swap any elements yet, so we can restore
+            ;; the whole heap.
+            (setf (aref vector count) bottom
+                  (aref vector index) victim
+                  (heap-state heap) :clean)
+            ;; Can't recover, but at least put VICTIM back -- recovery of
+            ;; sorts is still possible using unordered MAP-HEAP.
+            (setf (aref vector count) victim))))
     victim))
 
 (defun heap-delete (elt heap)
