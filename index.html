@@ -1,1 +1,239 @@
-Pileup
+<html lang="en">
+<head>
+<title>Pileup</title>
+<meta http-equiv="Content-Type" content="text/html">
+<meta name="description" content="Pileup">
+<meta name="generator" content="makeinfo 4.8">
+<link title="Top" rel="top" href="#Top">
+<link href="http://www.gnu.org/software/texinfo/" rel="generator-home" title="Texinfo Homepage">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<style type="text/css"><!--
+  pre.display { font-family:inherit }
+  pre.format  { font-family:inherit }
+  pre.smalldisplay { font-family:inherit; font-size:smaller }
+  pre.smallformat  { font-family:inherit; font-size:smaller }
+  pre.smallexample { font-size:smaller }
+  pre.smalllisp    { font-size:smaller }
+  span.sc    { font-variant:small-caps }
+  span.roman { font-family:serif; font-weight:normal; } 
+  span.sansserif { font-family:sans-serif; font-weight:normal; } 
+.node { visibility:hidden; height: 0px; }
+.menu { visibility:hidden; height: 0px; }
+.chapter { background-color:#ffe4fe; }
+.section { background-color:#ffe4fe; }
+.subsection { background-color:#ffe4fe; }
+.settitle { background-color:#ffe4fe; }
+.contents { border: 2px solid black;
+            margin: 1cm 1cm 1cm 1cm; 
+            padding-left: 3mm; }
+
+body { padding: 2em 8em; font-family: sans-serif; }
+
+h1 { padding: 1em; text-align: center; }
+
+
+--></style>
+</head>
+<body>
+<h1 class="settitle">Pileup</h1>
+Pileup provides a portable, performant, and thread-safe binary heap
+for Common Lisp, licensed under MIT-style license.
+
+   <p>It depends on Alexandria, and outside SBCL additionally on Bordeaux-Threads.
+
+   <p>Pileup is courtesy of <a href="http://sb-studio.net/">Steel Bank Studio Ltd</a> and written by <a href="mailto:nikodemus@sb-studio.net">Nikodemus Siivola</a>.
+
+   <p>Pileup is maintained in Git:
+<pre class="example">     git clone git://github.com/nikodemus/pileup.git
+</pre>
+   <p>will get you a local copy.
+
+   <div class="contents">
+<h2>Table of Contents</h2>
+<ul>
+<li><a name="toc_TOC0" href="#TOC0">1 Making Heaps</a>
+<li><a name="toc_TOC1" href="#TOC1">2 Heap Operations</a>
+<li><a name="toc_TOC2" href="#TOC2">3 Heap Properties</a>
+</li></ul>
+</div>
+
+<h2 class="chapter"><a name="TOC0"></a>1 Making Heaps</h2>
+
+<p><a name="Structure-heap"></a>
+
+<div class="defun">
+&mdash; Structure: <b>heap</b><var><a name="index-heap-1"></a></var><br>
+<blockquote><p><a name="index-heap-2"></a>Class precedence list: <code>heap, structure-object, t</code>
+
+        <p>A thread-safe binary heap.
+
+        <p>Heap operations which need the heap to remain consistent heap lock it. Users
+can also group multiple heap operations into atomic units using
+<code>with-locked-heap</code>.
+
+        <p>Thread-safety is implemented using a single lock per heap. While Pileup heaps
+are fine for threaded use, a more specialized solution is recommended when the
+heap is highly contested between multiple threads.
+
+        <p>Important: Pileup heaps are not asynch-unwind safe: asynchronous interrupts
+causing non-local exits may leave the heap in an inconsistent state or lose
+data. Do not use <code>interrupt-thread</code> or asychronous timeouts with Pileup. 
+</p></blockquote></div>
+
+   <p><a name="Function-make_002dheap"></a>
+
+<div class="defun">
+&mdash; Function: <b>make-heap</b><var> predicate &amp;key name size key<a name="index-make_002dheap-3"></a></var><br>
+<blockquote><p><a name="index-make_002dheap-4"></a>Constructs a <code>heap</code>.
+
+        <p>The <code>predicate</code> determines the ordering of the heap. It must be a function of two
+arguments, returning true if the first argument should be closer to top of the
+heap than the second. If a predicate signals an error and causes a non-local
+exit from a heap operation, it may leave the heap in an inconsistent state and
+cause a subsequent heap operation to signal an error.
+
+        <p>If <code>key</code> is not <code>nil</code>, it must be a function of one argument, and is used to
+extract values for use by <code>predicate</code> for comparison.
+
+        <p>The <code>name</code> can be used to optionally specify a name for the heap: it affects only
+printing of the heap.
+
+        <p>The <code>size</code> is the size of the storage initially reserved for the heap. 
+Specifying size is not necessary: the heap will grow as necessary, but a
+reasonable estimate can improve performance by eliminating unnecessary copying
+by allocation sufficient storage immediately. 
+</p></blockquote></div>
+
+<h2 class="chapter"><a name="TOC1"></a>2 Heap Operations</h2>
+
+<p><a name="Macro-with_002dlocked_002dheap"></a>
+
+<div class="defun">
+&mdash; Macro: <b>with-locked-heap</b> (<var>heap</var>)<var> &amp;body body<a name="index-with_002dlocked_002dheap-5"></a></var><br>
+<blockquote><p><a name="index-with_002dlocked_002dheap-6"></a>Executes <code>body</code> with <code>heap</code> locked. Heap operations which implicitly lock the
+heap are: <code>heap-insert</code>, <code>heap-pop</code>, <code>heap-delete</code>, and <code>map-heap</code>. Allows grouping
+multiple heap operations into atomic units. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dinsert"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-insert</b><var> elt heap<a name="index-heap_002dinsert-7"></a></var><br>
+<blockquote><p><a name="index-heap_002dinsert-8"></a>Insert <code>elt</code> to <code>heap</code>. Returns <code>elt</code>.
+
+        <p>Locks the heap during its operation unless the current thread is already
+holding the heap lock via <code>with-locked-heap</code>. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dpop"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-pop</b><var> heap<a name="index-heap_002dpop-9"></a></var><br>
+<blockquote><p><a name="index-heap_002dpop-10"></a>Removes and returns the element at the top of the <code>heap</code> and a secondary value of <code>t</code>. 
+Should the heap be empty, both the primary and the secondary values are <code>nil</code>.
+
+        <p>Locks the heap during its operation unless the current thread is already
+holding the heap lock via <code>with-locked-heap</code>. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dtop"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-top</b><var> heap<a name="index-heap_002dtop-11"></a></var><br>
+<blockquote><p><a name="index-heap_002dtop-12"></a>Returns the element at the top of the <code>heap</code> without removing it, and a
+secondary value of <code>t</code>. Should the heap be empty, both the primary and the
+secondary values are <code>nil</code>. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002ddelete"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-delete</b><var> elt heap<a name="index-heap_002ddelete-13"></a></var><br>
+<blockquote><p><a name="index-heap_002ddelete-14"></a>If <code>elt</code> is in <code>heap</code>, removes it. Returns <code>t</code> if one or more references to <code>elt</code>
+were found and removed, <code>nil</code> otherwise.
+
+        <p>Locks the heap during its operation unless the current thread is already
+holding the heap lock via <code>with-locked-heap</code>. 
+</p></blockquote></div>
+
+   <p><a name="Function-map_002dheap"></a>
+
+<div class="defun">
+&mdash; Function: <b>map-heap</b><var> function heap &amp;key ordered<a name="index-map_002dheap-15"></a></var><br>
+<blockquote><p><a name="index-map_002dheap-16"></a>Calls <code>function</code> for each element in heap. Returns the heap.
+
+        <p>If <code>ordered</code> is true (the default), processes the elements in heap order from
+top down.
+
+        <p>If <code>ordered</code> is false, uses unordered traversal. Unordered traversal is faster
+and also works on heaps that have been corrupted by eg. the heap predicate
+performing a non-local exit from a heap operation.
+
+        <p>Attempts to insert or delete elements to the heap from <code>function</code> will cause
+an error to be signalled.
+
+        <p>Locks the heap during its operation unless the current thread is already
+holding the heap lock via <code>with-locked-heap</code>. 
+</p></blockquote></div>
+
+<h2 class="chapter"><a name="TOC2"></a>3 Heap Properties</h2>
+
+<p><a name="Function-heap_002dcount"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-count</b><var> heap<a name="index-heap_002dcount-17"></a></var><br>
+<blockquote><p><a name="index-heap_002dcount-18"></a>Returns the number of objects in the heap. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dempty_002dp"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-empty-p</b><var> heap<a name="index-heap_002dempty_002dp-19"></a></var><br>
+<blockquote><p><a name="index-heap_002dempty_002dp-20"></a>Returns true if the heap is empty, that is iff <code>heap-count</code> is zero. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dname"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-name</b><var> heap<a name="index-heap_002dname-21"></a></var><br>
+<blockquote><p><a name="index-heap_002dname-22"></a>Returns the name of the heap. Heap name affects only printed
+representation of the heap. Can be changed using <code>setf</code> unlike other heap
+properties. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dkey"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-key</b><var> heap<a name="index-heap_002dkey-23"></a></var><br>
+<blockquote><p><a name="index-heap_002dkey-24"></a>Returns the heap key, a function one argument used to extract values for
+use by the heap predicate. Heap key may also be <code>nil</code>, meaning heap elements are
+used directly by the heap predicate. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dpredicate"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-predicate</b><var> heap<a name="index-heap_002dpredicate-25"></a></var><br>
+<blockquote><p><a name="index-heap_002dpredicate-26"></a>Returns the heap predicate, a function of two arguments, returning true if
+the first argument should be closer to te top of the heap than the second. 
+</p></blockquote></div>
+
+   <p><a name="Function-heap_002dsize"></a>
+
+<div class="defun">
+&mdash; Function: <b>heap-size</b><var> heap<a name="index-heap_002dsize-27"></a></var><br>
+<blockquote><p><a name="index-heap_002dsize-28"></a>Returns the reserved size of the heap. Note, this is not the same as the
+number of elements in the heap: see <code>heap-count</code> for comparison. 
+</p></blockquote></div>
+
+   <p><a name="Constant-heap_002dsize_002dlimit"></a>
+
+<div class="defun">
+&mdash; Constant: <b>heap-size-limit</b><var><a name="index-heap_002dsize_002dlimit-29"></a></var><br>
+<blockquote><p><a name="index-heap_002dsize_002dlimit-30"></a>Exclusive upper limit for heap size, based on <code>array-dimension-limit</code>. 
+When an insertion is attempted and the heap cannot grow any further, an error
+is signaled. 
+</p></blockquote></div>
+
+</body></html>
+
