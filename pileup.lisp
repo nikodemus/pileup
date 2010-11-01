@@ -296,10 +296,11 @@ holding the heap lock via WITH-LOCKED-HEAP."
          (recoverable t))
     (unwind-protect
          (progn
-           ;; Move BOTTOM in place of VICTIM.
+           ;; Move BOTTOM in place of VICTIM. Order is important here: if
+           ;; INDEX=COUNT we want to be left with +EMPTY+.
            (setf (heap-state heap) :dirty
-                 (aref vector count) +empty+
                  (aref vector index) bottom
+                 (aref vector count) +empty+
                  (heap-%count heap) (decf count))
            ;; Restore heap property.
            ;; Step 1: from deleted element to end
@@ -385,10 +386,11 @@ holding the heap lock via WITH-LOCKED-HEAP."
                        (cond ((eql elt parent-elt)
                               ;; Got it. Now delete them all.
                               (loop do (%heap-delete parent heap)
-                                    while (eql elt (aref vector parent))))
+                                    while (eql elt (aref vector parent)))
+                              (return-from heap-delete t))
                              ((funcall test elt parent-elt)
                               ;; Searched past it.
-                              (return-from heap-delete t))
+                              (return-from heap-delete nil))
                              (t
                               (let* ((left (* 2 parent))
                                      (right (1+ left)))

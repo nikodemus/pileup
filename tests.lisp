@@ -156,3 +156,10 @@
       (heap-insert (cons i t) heap))
     (is (= 12 (heap-count heap)))
     (is (equal (cons 0 t) (heap-top heap)))))
+
+(deftest delete-multiple-from-top ()
+  (let ((heap (make-heap #'>)))
+    (heap-insert 100 heap)
+    (heap-insert 100 heap)
+    (is (eq t (heap-delete 100 heap)))
+    (is (heap-empty-p heap))))
