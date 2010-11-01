@@ -25,19 +25,21 @@
    "Pileup provides a thread-safe binary heap implementation.")
   (:export
    #:heap
-   #:heap-p
    #:heap-count
+   #:heap-delete
    #:heap-empty-p
+   #:heap-insert
+   #:heap-name
+   #:heap-p
+   #:heap-pop
+   #:heap-predicate
    #:heap-size
    #:heap-size-limit
-   #:heap-predicate
-   #:make-heap
-   #:with-locked-heap
-   #:heap-insert
    #:heap-top
-   #:heap-pop
-   #:heap-delete
-   #:map-heap)
+   #:make-heap
+   #:map-heap
+   #:with-locked-heap
+   )
   (:import-from :alexandria #:array-index #:required-argument)
   #+sb-package-locks
   (:lock t))
