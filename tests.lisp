@@ -163,3 +163,12 @@
     (heap-insert 100 heap)
     (is (eq t (heap-delete 100 heap)))
     (is (heap-empty-p heap))))
+
+(deftest delete-count ()
+  (let ((heap (make-heap #'>)))
+    (heap-insert 100 heap)
+    (heap-insert 100 heap)
+    (is (eq t (heap-delete 100 heap :count 1)))
+    (is (not (heap-empty-p heap)))
+    (is (= 100 (heap-pop heap)))
+    (is (heap-empty-p heap))))

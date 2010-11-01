@@ -362,19 +362,25 @@ holding the heap lock via WITH-LOCKED-HEAP."
             (setf (aref vector count) victim))))
     victim))
 
-(defun heap-delete (elt heap)
+(defun heap-delete (elt heap &key count)
   "If ELT is in HEAP, removes it. Returns T if one or more references to ELT
 were found and removed, NIL otherwise.
+
+If COUNT is NIL (the default), deletes all references to ELT from the heap.
+Otherwise at most the indicated number.
 
 Locks the heap during its operation unless the current thread is already
 holding the heap lock via WITH-LOCKED-HEAP."
   (declare (type heap heap))
   (with-locked-heap (heap)
     (check-heap-clean heap 'heap-delete)
-    (let* ((count (heap-count heap))
+    (let* ((todo (cond ((not count) -1)
+                       ((minusp count) 0)
+                       (t count)))
+           (count (heap-count heap))
            (vector (heap-vector heap))
            (test (heap-test heap)))
-      (unless (zerop count)
+      (unless (or (zerop count) (zerop todo))
         (let ((fringe (make-heap (lambda (x y)
                                    (funcall test (aref vector x) (aref vector y))))))
           ;; Grab the lock now so we don't need to do that repeatedly.
@@ -386,7 +392,8 @@ holding the heap lock via WITH-LOCKED-HEAP."
                        (cond ((eql elt parent-elt)
                               ;; Got it. Now delete them all.
                               (loop do (%heap-delete parent heap)
-                                    while (eql elt (aref vector parent)))
+                                       (decf todo)
+                                    while (and (plusp todo) (eql elt (aref vector parent))))
                               (return-from heap-delete t))
                              ((funcall test elt parent-elt)
                               ;; Searched past it.
