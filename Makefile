@@ -1,4 +1,4 @@
-.PHONY: doc
+.PHONY: doc web
 
 all:
 	echo "Targets: clean, wc"
@@ -12,3 +12,8 @@ wc:
 
 doc:
 	make -C doc
+
+web: doc
+	cp doc/pileup.html tmp.html
+	git checkout gh-pages
+	mv tmp.html index.html
