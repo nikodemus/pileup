@@ -62,7 +62,14 @@ also group multiple heap operations into atomic units using WITH-LOCKED-HEAP.
 
 Thread-safety is implemented using a single lock per heap. While PILEUP:HEAP
 is fine for heaps used from multiple threads, a more specialized solution is
-recommended when the heap is highly contested between multiple threads."
+recommended when the heap is highly contested between multiple threads.
+
+Pileup heaps are NOT asynch-unwind safe: asynchronous interrupts causing
+non-local exits may leave the heap in an inconsistent state or lose data. Ie.
+DO NOT USE INTERRUPT-THREAD or asychronous timeouts with Pileup.
+
+\(Never assume Lisp code is asych-unwind safe unless that has
+explicitly been stated to be the case.)"
   (name nil :read-only t)
   ;; One longer than SIZE: we keep the min element in both 0 and 1. Using
   ;; 1-based addressing makes heap calculations simpler, and keeping a
