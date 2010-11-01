@@ -37,4 +37,4 @@
 
 (defmethod perform ((o test-op) (c (eql (find-system :pileup))))
   (load-system :pileup-tests)
-  (funcall (intern (string '#:test-pileupz) :pileup-tests)))
+  (funcall (intern (string '#:test-pileup) :pileup-tests)))
