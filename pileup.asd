@@ -30,3 +30,11 @@
                (:file "pileup")
                (:static-file "README")
                (:static-file "LICENCE")))
+
+(defsystem :pileup-tests
+  :depends-on (:pileup :hu.dwim.stefil)
+  :components ((:file "tests")))
+
+(defmethod perform ((o test-op) (c (eql (find-system :pileup))))
+  (load-system :pileup-tests)
+  (funcall (intern (string '#:test-pileupz) :pileup-tests)))
