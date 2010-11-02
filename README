@@ -1,10 +1,18 @@
-Pileup is a simple thread-safe binary heap implementation for Common Lisp,
-under MIT-style licence.
+Pileup is a portable, performant, and thread-safe binary heap for Common
+Lisp, under an MIT-style licence.
+
+The rest of this file is best viewed under org-mode.
 
 TODO
 
-* HEAP-DELETE should accept keyword arguments similar to CL:DELETE.
-* Add HEAP-DELETE-IF and HEAP-DELETE-IF-NOT.
-* MAKE-HEAP should also accept :ELEMENT-TYPE.
+* WIP HEAP-DELETE should accept keyword arguments similar to CL:DELETE.
+*** DONE :COUNT
+*** TODO :TEST -- keep it performant, simplify EQL to inline EQ when possible.
+*** TODO :KEY -- default to NIL or HEAP-KEY?
+    If TEST or KEY is used, HEAP-DELETE needs to traverse the entire
+    heap: it is not generally possible to know if (FUNCALL TEST ELT X)
+    implies anything about the ordering, unlike with EQL.
+* TODO MERGE-HEAPS
+* TODO MAKE-HEAP should also accept :ELEMENT-TYPE.
   Unboxed allocation for long-lived heaps storing numbers.
-* Add other types of heaps.
+* TODO Add other types of heaps.
