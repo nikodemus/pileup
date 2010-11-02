@@ -172,3 +172,11 @@
     (is (not (heap-empty-p heap)))
     (is (= 100 (heap-pop heap)))
     (is (heap-empty-p heap))))
+
+#+sbcl
+(deftest slot-names-nice ()
+  (let ((pileup (find-package :pileup)))
+    (dolist (slotd (sb-mop:class-slots (find-class 'heap)))
+      (let ((name (sb-mop:slot-definition-name slotd)))
+        (is (eq pileup (symbol-package name)))
+        (is (eq :internal (nth-value 1 (find-symbol (string name) pileup))))))))

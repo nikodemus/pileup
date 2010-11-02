@@ -31,13 +31,13 @@
     (setf (aref vector 0) +empty+)
     vector))
 
-(declaim (inline make-heap make-heap-using-test))
+(declaim (inline make-heap make-heap-using-fast-pred))
 (defstruct (heap
              (:constructor make-heap
                            (predicate &key ((:name %name)) ((:size %size) 12) ((:key %key))
-                                      &aux (vector (make-heap-vector %size))
+                                      &aux (%vector (make-heap-vector %size))
                                            (%predicate predicate)
-                                           (test
+                                           (fast-pred
                                             (locally
                                                 #+sbcl
                                                 (declare (sb-ext:muffle-conditions
@@ -52,9 +52,9 @@
                                                             (yy (funcall %key y)))
                                                         (funcall %predicate xx yy)))
                                                     %predicate)))))
-             (:constructor make-heap-using-test
-                           (%predicate test &key ((:name %name)) ((:size %size) 12)
-                                             &aux (vector (make-heap-vector %size))))
+             (:constructor make-heap-using-fast-pred
+                           (%predicate fast-pred &key ((:name %name)) ((:size %size) 12)
+                                                 &aux (%vector (make-heap-vector %size))))
              (:copier nil)
              (:predicate nil))
   "A thread-safe binary heap.
@@ -69,7 +69,11 @@ heap is highly contested between multiple threads.
 
 Important: Pileup heaps are not asynch-unwind safe: asynchronous interrupts
 causing non-local exits may leave the heap in an inconsistent state or lose
-data. Do not use INTERRUPT-THREAD or asychronous timeouts with Pileup."
+data. Do not use INTERRUPT-THREAD or asychronous timeouts with Pileup.
+
+All slot names in HEAP are internal to the PILEUP package, so it is safe to
+subclass using eg. DEFSTRUCT :INCLUDE, as long as only the exported operations
+are used to accessor or modify heap state."
   (%name nil)
   ;; One longer than SIZE: we keep the min element in both 0 and 1. Using
   ;; 1-based addressing makes heap calculations simpler, and keeping a
@@ -78,13 +82,17 @@ data. Do not use INTERRUPT-THREAD or asychronous timeouts with Pileup."
   ;; Using adjustable arrays would make the code simpler, but because the
   ;; loops for maintaining the heap-property don't need to adjust the vectors
   ;; we'd be paying for the increased access overheap in just the wrong place.
-  (vector (required-argument :vector) :type simple-vector)
+  ;;
+  ;; The name is uglified with % because VECTOR is a symbol in CL, and we
+  ;; don't want to have clashes with user code subclassing this structure, who
+  ;; might also want to use that name.
+  (%vector (required-argument :vector) :type simple-vector)
   (%count 0 :type array-index)
   (%size (required-argument :%size) :type array-index)
   (%predicate (required-argument :predicate) :type function :read-only t)
   (%key nil :type (or null function) :read-only t)
   ;; Combination of KEY and PREDICATE.
-  (test (required-argument :test) :type function :read-only t)
+  (fast-pred (required-argument :fast-pred) :type function :read-only t)
   (lock #+sbcl (sb-thread:make-mutex :name "Heap Lock")
         #-sbcl (bordeaux-threads:make-lock :name "Heap Lock")
         :read-only t)
@@ -100,14 +108,14 @@ data. Do not use INTERRUPT-THREAD or asychronous timeouts with Pileup."
     ;; calling them with a known number of arguments. Once :ELEMENT-TYPE is
     ;; added we can also inform the predicate about it here.
     ;;
-    ;; At least for compilers like SBCL the TEST lambda in the constructor
+    ;; At least for compilers like SBCL the FAST-PRED lambda in the constructor
     ;; does the same job for cases where KEY is provided.
     (if (and no-key
              (consp predicate)
              (starts-with 'function predicate)
              (member (second predicate) '(< <= > >=)))
         (with-gensyms (x y)
-          `(make-heap-using-test ,predicate
+          `(make-heap-using-fast-pred ,predicate
                                  (lambda (,x ,y)
                                    (declare (optimize (speed 3)
                                                       (debug 0)
@@ -225,14 +233,14 @@ holding the heap lock via WITH-LOCKED-HEAP."
   (declare (heap heap))
   (with-locked-heap (heap)
     (check-heap-clean heap 'heap-insert)
-    (let* ((vector (heap-vector heap))
-           (test (heap-test heap))
+    (let* ((vector (heap-%vector heap))
+           (fast-pred (heap-fast-pred heap))
            (size (heap-size heap))
            (count (heap-count heap)))
       ;; Sanity-check the heap element: if the predicate will signal an error
       ;; on receiving it, it is better to know about it before we mess up the
       ;; heap state.
-      (funcall test elt elt)
+      (funcall fast-pred elt elt)
       ;; Make space if necessary.
       (when (= count size)
         (when (= size max-heap-size)
@@ -241,7 +249,7 @@ holding the heap lock via WITH-LOCKED-HEAP."
                (new (make-array (1+ new-size))))
           (setf vector (replace new vector)
                 (heap-%size heap) new-size
-                (heap-vector heap) vector)))
+                (heap-%vector heap) vector)))
       ;; Mark the heap dirty, and insert the element at the end of the vector.
       (setf (heap-state heap) :dirty
             (aref vector (incf count)) elt
@@ -252,7 +260,7 @@ holding the heap lock via WITH-LOCKED-HEAP."
             do (let* ((parent (truncate child 2))
                       (parent-data (aref vector parent))
                       (child-data (aref vector child)))
-                 (cond ((funcall test parent-data child-data)
+                 (cond ((funcall fast-pred parent-data child-data)
                         (return))
                        (t
                         (setf (aref vector child) parent-data
@@ -267,7 +275,7 @@ holding the heap lock via WITH-LOCKED-HEAP."
   "Returns the element at the top of the HEAP without removing it, and a
 secondary value of T. Should the heap be empty, both the primary and the
 secondary values are NIL."
-  (let ((elt (aref (heap-vector heap) 0)))
+  (let ((elt (aref (heap-%vector heap) 0)))
     (if (eq +empty+ elt)
         (values nil nil)
         (values elt t))))
@@ -288,11 +296,11 @@ holding the heap lock via WITH-LOCKED-HEAP."
 
 ;;; Delete heap element identified by vector index.
 (defun %heap-delete (index heap)
-  (let* ((vector (heap-vector heap))
+  (let* ((vector (heap-%vector heap))
          (count (heap-count heap))
          (victim (aref vector index))
          (bottom (aref vector count))
-         (test (heap-test heap))
+         (fast-pred (heap-fast-pred heap))
          (recoverable t))
     (unwind-protect
          (progn
@@ -314,12 +322,12 @@ holding the heap lock via WITH-LOCKED-HEAP."
                            (left-data nil)
                            (right-data nil))
                       (unless (or (> left count)
-                                  (funcall test parent-data
+                                  (funcall fast-pred parent-data
                                            (setf left-data (aref vector left))))
                         (setf local left
                               local-data left-data))
                       (unless (or (> right count)
-                                  (funcall test local-data
+                                  (funcall fast-pred local-data
                                            (setf right-data (aref vector right))))
                         (setf local right
                               local-data right-data))
@@ -339,7 +347,7 @@ holding the heap lock via WITH-LOCKED-HEAP."
                      do (let* ((parent (truncate child 2))
                                (parent-data (aref vector parent))
                                (child-data (aref vector child)))
-                          (cond ((funcall test parent-data child-data)
+                          (cond ((funcall fast-pred parent-data child-data)
                                  (return))
                                 (t
                                  (setf (aref vector child) parent-data
@@ -378,11 +386,11 @@ holding the heap lock via WITH-LOCKED-HEAP."
                        ((minusp count) 0)
                        (t count)))
            (count (heap-count heap))
-           (vector (heap-vector heap))
-           (test (heap-test heap)))
+           (vector (heap-%vector heap))
+           (fast-pred (heap-fast-pred heap)))
       (unless (or (zerop count) (zerop todo))
         (let ((fringe (make-heap (lambda (x y)
-                                   (funcall test (aref vector x) (aref vector y))))))
+                                   (funcall fast-pred (aref vector x) (aref vector y))))))
           ;; Grab the lock now so we don't need to do that repeatedly.
           (with-locked-heap (fringe)
             (heap-insert 1 fringe)
@@ -395,7 +403,7 @@ holding the heap lock via WITH-LOCKED-HEAP."
                                        (decf todo)
                                     while (and (/= 0 todo) (eql elt (aref vector parent))))
                               (return-from heap-delete t))
-                             ((funcall test elt parent-elt)
+                             ((funcall fast-pred elt parent-elt)
                               ;; Searched past it.
                               (return-from heap-delete nil))
                              (t
@@ -431,14 +439,14 @@ holding the heap lock via WITH-LOCKED-HEAP."
            (unless (zerop count)
              ;; Mark the heap as traversed
              (setf (heap-state heap) :traverse)
-             (let ((vector (heap-vector heap)))
+             (let ((vector (heap-%vector heap)))
                (if ordered
                    ;; ORDERED = T traversal. Keep fringe in another heap
                    ;; to maintain order.
-                   (let* ((test (heap-test heap))
+                   (let* ((fast-pred (heap-fast-pred heap))
                           (fringe (make-heap
                                    (lambda (x y)
-                                     (funcall test (aref vector x) (aref vector y))))))
+                                     (funcall fast-pred (aref vector x) (aref vector y))))))
                      ;; Grab the lock now so we don't need to do that repeatedly.
                      (with-locked-heap (fringe)
                        (heap-insert 1 fringe)
