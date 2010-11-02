@@ -14,6 +14,6 @@ doc:
 	make -C doc
 
 web: doc
-	cp doc/pileup.html tmp.html
+	sbcl --script doc/splice-analytics.lisp < doc/pileup.html > tmp.html
 	git checkout gh-pages
 	mv tmp.html index.html
