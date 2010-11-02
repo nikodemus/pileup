@@ -161,11 +161,11 @@ secondary values are <code>nil</code>.
 
 <div class="defun">
 &mdash; Function: <b>heap-delete</b><var> elt heap &amp;key count<a name="index-heap_002ddelete-13"></a></var><br>
-<blockquote><p><a name="index-heap_002ddelete-14"></a>If <code>elt</code> is in <code>heap</code>, removes it. Returns <code>t</code> if one or more references to <code>elt</code>
+<blockquote><p><a name="index-heap_002ddelete-14"></a>Removes elements of the <code>heap</code> <code>eql</code> to <code>elt</code>. Returns <code>t</code> if one or more elements
 were found and removed, <code>nil</code> otherwise.
 
-        <p>If <code>count</code> is <code>nil</code> (the default), deletes all references to <code>elt</code> from the heap. 
-Otherwise at most the indicated number.
+        <p>If <code>count</code> is <code>nil</code> (the default), removes all elements <code>eql</code> to <code>elt</code>, otherwise at
+most the indicated number.
 
         <p>Locks the heap during its operation unless the current thread is already
 holding the heap lock via <code>with-locked-heap</code>. 
