@@ -363,11 +363,11 @@ holding the heap lock via WITH-LOCKED-HEAP."
     victim))
 
 (defun heap-delete (elt heap &key count)
-  "If ELT is in HEAP, removes it. Returns T if one or more references to ELT
+  "Removes elements of the HEAP EQL to ELT. Returns T if one or more elements
 were found and removed, NIL otherwise.
 
-If COUNT is NIL (the default), deletes all references to ELT from the heap.
-Otherwise at most the indicated number.
+If COUNT is NIL (the default), removes all elements EQL to ELT, otherwise at
+most the indicated number.
 
 Locks the heap during its operation unless the current thread is already
 holding the heap lock via WITH-LOCKED-HEAP."
