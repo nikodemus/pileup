@@ -89,7 +89,11 @@ heap is highly contested between multiple threads.
 
         <p>Important: Pileup heaps are not asynch-unwind safe: asynchronous interrupts
 causing non-local exits may leave the heap in an inconsistent state or lose
-data. Do not use <code>interrupt-thread</code> or asychronous timeouts with Pileup. 
+data. Do not use <code>interrupt-thread</code> or asychronous timeouts with Pileup.
+
+        <p>All slot names in <code>heap</code> are internal to the <code>pileup</code> package, so it is safe to
+subclass using eg. <code>defstruct</code> <code>:include</code>, as long as only the exported operations
+are used to accessor or modify heap state. 
 </p></blockquote></div>
 
    <p><a name="Function-make_002dheap"></a>
