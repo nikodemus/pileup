@@ -393,7 +393,7 @@ holding the heap lock via WITH-LOCKED-HEAP."
                               ;; Got it. Now delete them all.
                               (loop do (%heap-delete parent heap)
                                        (decf todo)
-                                    while (and (plusp todo) (eql elt (aref vector parent))))
+                                    while (and (/= 0 todo) (eql elt (aref vector parent))))
                               (return-from heap-delete t))
                              ((funcall test elt parent-elt)
                               ;; Searched past it.
