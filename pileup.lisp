@@ -337,23 +337,28 @@ holding the heap lock via WITH-LOCKED-HEAP."
                                 (aref vector local) parent-data
                                 parent local
                                 recoverable nil))))
-           (if (= index 1)
-               ;; Deleted the topmost element: copy it to V[0]
-               (setf (aref vector 0) (aref vector 1))
-               ;; Deleted something from middle: fix heap property
-               ;; towards the head.
-               (loop with child = index
-                     while (> child 1)
-                     do (let* ((parent (truncate child 2))
-                               (parent-data (aref vector parent))
-                               (child-data (aref vector child)))
-                          (cond ((funcall fast-pred parent-data child-data)
-                                 (return))
-                                (t
-                                 (setf (aref vector child) parent-data
-                                       (aref vector parent) child-data
-                                       child parent
-                                       recoverable nil))))))
+           ;; Step 2: fix towards the head.
+           (cond ((= index 1)
+                  ;; Deleted the topmost element: copy it to V[0]
+                  (setf (aref vector 0) (aref vector 1)))
+                 ((= index (1+ count))
+                  ;; Deleted the last element: nothing to do.
+                  )
+                 (t
+                  ;; Deleted something from middle: fix heap property
+                  ;; towards the head.
+                  (loop with child = index
+                        while (> child 1)
+                        do (let* ((parent (truncate child 2))
+                                  (parent-data (aref vector parent))
+                                  (child-data (aref vector child)))
+                             (cond ((funcall fast-pred parent-data child-data)
+                                    (return))
+                                   (t
+                                    (setf (aref vector child) parent-data
+                                          (aref vector parent) child-data
+                                          child parent
+                                          recoverable nil)))))))
            ;; Clean again
            (setf (heap-state heap) :clean))
       ;; If we're not clean, try to recover on unwind.

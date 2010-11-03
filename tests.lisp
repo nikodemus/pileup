@@ -173,6 +173,29 @@
     (is (= 100 (heap-pop heap)))
     (is (heap-empty-p heap))))
 
+(deftest delete-boundary-cases ()
+  (let ((heap (make-heap #'<)))
+    ;; No elements
+    (is (not (heap-delete 0 heap)))
+    (is (heap-empty-p heap))
+    ;; One element
+    (heap-insert 0 heap)
+    (is (heap-delete 0 heap))
+    (is (heap-empty-p heap))
+    ;; Two elements, first
+    (heap-insert 0 heap)
+    (heap-insert 1 heap)
+    (is (= 0 (heap-top heap)))
+    (is (heap-delete 0 heap))
+    (is (= 1 (heap-count heap)))
+    (is (= 1 (heap-top heap)))
+    ;; Two elements, last
+    (heap-insert 0 heap)
+    (is (= 0 (heap-top heap)))
+    (is (heap-delete 1 heap))
+    (is (= 1 (heap-count heap)))
+    (is (= 0 (heap-top heap)))))
+
 #+sbcl
 (deftest slot-names-nice ()
   (let ((pileup (find-package :pileup)))
