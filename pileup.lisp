@@ -94,7 +94,7 @@ are used to accessor or modify heap state."
   ;; Combination of KEY and PREDICATE.
   (fast-pred (required-argument :fast-pred) :type function :read-only t)
   (lock #+sbcl (sb-thread:make-mutex :name "Heap Lock")
-        #-sbcl (bordeaux-threads:make-lock :name "Heap Lock")
+        #-sbcl (bordeaux-threads:make-lock "Heap Lock")
         :read-only t)
   (state :clean :type (member :clean :dirty :traverse)))
 
