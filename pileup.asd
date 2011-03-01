@@ -1,4 +1,4 @@
-;;;; Copyright (c) 2010 Nikodemus Siivola <nikodemus@sb-studio.net>
+;;;; Copyright (c) 2010-2011 Nikodemus Siivola <nikodemus@sb-studio.net>
 ;;;;
 ;;;; Permission is hereby granted, free of charge, to any person obtaining
 ;;;; a copy of this software and associated documentation files (the
@@ -21,10 +21,11 @@
 
 (defsystem :pileup
   :depends-on (:alexandria #-sbcl :bordeaux-threads)
-  :description "A thread-safe binary heap."
+  :description
+  "A portable, performant, and thread-safe binary heap / priority queue."
   :licence "MIT"
   :author "Nikodemus Siivola <nikodemus@sb-studio.net>"
-  :version "0.9.0"
+  :version "1.0"
   :serial t
   :components ((:file "package")
                (:file "pileup")
