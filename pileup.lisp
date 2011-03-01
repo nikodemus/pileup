@@ -144,7 +144,7 @@ printing of the heap.
 The SIZE is the size of the storage initially reserved for the heap.
 Specifying size is not necessary: the heap will grow as necessary, but a
 reasonable estimate can improve performance by eliminating unnecessary copying
-by allocation sufficient storage immediately.")
+by allocating sufficient storage immediately.")
 
 ;;; KLUDGE: For prettier arglist in the docs.
 (defun heap-name (heap)
