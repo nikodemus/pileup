@@ -77,7 +77,7 @@ are used to accessor or modify heap state."
   (%name nil)
   ;; One longer than SIZE: we keep the min element in both 0 and 1. Using
   ;; 1-based addressing makes heap calculations simpler, and keeping a
-  ;; separate reference in 0 allows HEAP-MIN to be lockless.
+  ;; separate reference in 0 allows HEAP-TOP to be lockless.
   ;;
   ;; Using adjustable arrays would make the code simpler, but because the
   ;; loops for maintaining the heap-property don't need to adjust the vectors
