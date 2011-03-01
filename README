@@ -3,7 +3,7 @@ Lisp, under an MIT-style licence.
 
 The rest of this file is best viewed under org-mode.
 
-TODO
+TODO for 2.0
 
 * WIP HEAP-DELETE should accept keyword arguments similar to CL:DELETE.
 *** DONE :COUNT
