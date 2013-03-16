@@ -1,0 +1,13 @@
+TODO for 2.0
+
+* WIP HEAP-DELETE should accept keyword arguments similar to CL:DELETE.
+*** DONE :COUNT
+*** TODO :TEST -- keep it performant, simplify EQL to inline EQ when possible.
+*** TODO :KEY -- default to NIL or HEAP-KEY?
+    If TEST or KEY is used, HEAP-DELETE needs to traverse the entire
+    heap: it is not generally possible to know if (FUNCALL TEST ELT X)
+    implies anything about the ordering, unlike with EQL.
+* TODO MERGE-HEAPS
+* TODO MAKE-HEAP should also accept :ELEMENT-TYPE.
+  Unboxed allocation for long-lived heaps storing numbers.
+* TODO Add other types of heaps.
