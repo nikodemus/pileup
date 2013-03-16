@@ -29,9 +29,6 @@ for Common Lisp, licensed under MIT-style license.
 
 It depends on Alexandria, and outside SBCL additionally on Bordeaux-Threads.
 
-Pileup is courtesy of @url{http://sb-studio.net/, Steel Bank Studio
-Ltd} and written by @email{nikodemus@@sb-studio.net, Nikodemus Siivola}.
-
 Pileup is maintained in Git:
 @example
 git clone git://github.com/nikodemus/pileup.git

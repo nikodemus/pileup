@@ -1,4 +1,4 @@
-;;;; Copyright (c) 2010-2011 Nikodemus Siivola <nikodemus@sb-studio.net>
+;;;; Copyright (c) 2010-2013 Nikodemus Siivola <nikodemus@random-state.net>
 ;;;;
 ;;;; Permission is hereby granted, free of charge, to any person obtaining
 ;;;; a copy of this software and associated documentation files (the
@@ -24,8 +24,8 @@
   :description
   "A portable, performant, and thread-safe binary heap / priority queue."
   :licence "MIT"
-  :author "Nikodemus Siivola <nikodemus@sb-studio.net>"
   :version "1.0"
+  :author "Nikodemus Siivola <nikodemus@random-state.net>"
   :serial t
   :components ((:file "package")
                (:file "pileup")

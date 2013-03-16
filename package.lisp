@@ -1,4 +1,4 @@
-;;;; Copyright (c) 2010 Nikodemus Siivola <nikodemus@sb-studio.net>
+;;;; Copyright (c) 2010-2013 Nikodemus Siivola <nikodemus@random-state.net>
 ;;;;
 ;;;; Permission is hereby granted, free of charge, to any person obtaining
 ;;;; a copy of this software and associated documentation files (the
