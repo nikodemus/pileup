@@ -24,8 +24,8 @@
   :description
   "A portable, performant, and thread-safe binary heap / priority queue."
   :licence "MIT"
-  :version "1.0"
   :author "Nikodemus Siivola <nikodemus@random-state.net>"
+  :version "1.0.1"
   :serial t
   :components ((:file "package")
                (:file "pileup")

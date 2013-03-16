@@ -98,32 +98,48 @@ are used to accessor or modify heap state."
         :read-only t)
   (state :clean :type (member :clean :dirty :traverse)))
 
+;;; Calling variadic functions like #'< is generally a whole lot slower than
+;;; calling them with a known number of arguments, so we generate fixed-arity
+;;; versions for the normal ones.
+(defvar *two-arg-predicates* nil)
+(macrolet ((fast (name)
+             (let ((two-arg-name (symbolicate '#:two-arg- name)))
+               `(progn
+                  (defun ,two-arg-name (x y)
+                    (declare (optimize (speed 3) (debug 0) (safety 0)))
+                    #+sbcl
+                    (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
+                    (,name x y))
+                  (pushnew (cons ',name '#',two-arg-name)
+                           *two-arg-predicates*
+                           :test #'equal)))))
+  (fast <)
+  (fast <=)
+  (fast >)
+  (fast >=))
+
 (define-compiler-macro make-heap (&whole whole predicate &rest initargs)
   (let ((no-key t))
-    ;; Check that no KEY is being used.
+    ;; Check that there's no non-null KEY is being used.
     (doplist (key val initargs)
       (when (or (eq :key key) (not (keywordp key)))
-        (setf no-key nil)))
-    ;; Calling variadic functions like #'< is generally a whole lot slower than
-    ;; calling them with a known number of arguments. Once :ELEMENT-TYPE is
-    ;; added we can also inform the predicate about it here.
-    ;;
+        (unless (null val)
+          (setf no-key nil)))
+      (when (eq :key key)
+        (return)))
     ;; At least for compilers like SBCL the FAST-PRED lambda in the constructor
     ;; does the same job for cases where KEY is provided.
-    (if (and no-key
-             (consp predicate)
-             (starts-with 'function predicate)
-             (member (second predicate) '(< <= > >=)))
-        (with-gensyms (x y)
-          `(make-heap-using-fast-pred ,predicate
-                                 (lambda (,x ,y)
-                                   (declare (optimize (speed 3)
-                                                      (debug 0)
-                                                      (safety 0)))
-                                   #+sbcl
-                                   (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
-                                   (funcall ,predicate ,x ,y))
-                                 ,@initargs))
+    ;;
+    ;; (Once :ELEMENT-TYPE is added we can also inform the predicate about it
+    ;; here.)
+    (if no-key
+        (let ((fast-pred
+                (or (and (consp predicate)
+                         (starts-with 'function predicate)
+                         (cdr (assoc (second predicate) *two-arg-predicates*)))
+                    predicate)))
+          `(make-heap-using-fast-pred ,predicate ,fast-pred
+                                      ,@(remove-from-plist initargs :key)))
         whole)))
 
 (setf (documentation 'make-heap 'function)

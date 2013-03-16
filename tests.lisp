@@ -203,3 +203,25 @@
       (let ((name (sb-mop:slot-definition-name slotd)))
         (is (eq pileup (symbol-package name)))
         (is (eq :internal (nth-value 1 (find-symbol (string name) pileup))))))))
+
+(deftest cmacro-two-arg-pred ()
+  (let ((constructor-form (funcall (compiler-macro-function 'make-heap)
+                                   `(make-heap #'< :key nil)
+                                   nil)))
+    (is (equal `(pileup::make-heap-using-fast-pred #'< #'pileup::two-arg-<)
+               constructor-form))))
+
+(deftest cmacro-user-pred ()
+  (let ((constructor-form (funcall (compiler-macro-function 'make-heap)
+                                   `(make-heap #'string< :key nil)
+                                   nil)))
+    (is (equal `(pileup::make-heap-using-fast-pred #'string< #'string<)
+               constructor-form))
+    (let ((heap (eval constructor-form)))
+      (loop for char across "QWERTY"
+            do (heap-insert (string char) heap))
+      (is (string= "EQRTWY"
+                   (with-output-to-string (s)
+                     (loop for x = (heap-pop heap)
+                           while x
+                           do (write-string x s))))))))
