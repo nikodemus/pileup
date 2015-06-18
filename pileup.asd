@@ -34,6 +34,9 @@
 
 (defsystem :pileup-tests
   :depends-on (:pileup :hu.dwim.stefil)
+  :licence "MIT"
+  :description "Tests for PILEUP."
+  :author "Nikodemus Siivola <nikodemus@random-state.net>"
   :components ((:file "tests")))
 
 (defmethod perform ((o test-op) (c (eql (find-system :pileup))))
